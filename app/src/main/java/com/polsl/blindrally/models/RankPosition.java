@@ -2,15 +2,15 @@ package com.polsl.blindrally.models;
 
 public class RankPosition {
 
-    private int position;
+    private String position;
     private String name;
     private String time;
 
-    public int getPosition() {
+    public String getPosition() {
         return position;
     }
 
-    public void setPosition(int position) {
+    public void setPosition(String position) {
         this.position = position;
     }
 

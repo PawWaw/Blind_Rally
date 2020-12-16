@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.res.AssetManager;
 
 import com.polsl.blindrally.models.RankPosition;
+import com.polsl.blindrally.models.RankingList;
+import com.polsl.blindrally.models.Track;
 import com.polsl.blindrally.models.Turn;
 
 import java.io.BufferedReader;
@@ -16,25 +18,24 @@ import java.util.List;
 public class FileUtils {
 
     private final Context mContext;
-    private InputStream is;
-    private final AssetManager am;
 
     public FileUtils(Context ctx) {
         this.mContext = ctx;
-        am = mContext.getAssets();
     }
 
-    public List<List<Turn>> readTracks() {
-        List<List<Turn>> list = new ArrayList<>();
+    public List<Track> readTracks() {
+        List<Track> list = new ArrayList<>();
 
         try {
             String trackDir = "tracks";
-            String[] locales = am.list(trackDir);
+            String[] locales = mContext.getAssets().list(trackDir);
             for (String locale : locales) {
-                is = am.open(trackDir + "/" + locale);
+                InputStream is = mContext.getAssets().open(trackDir + "/" + locale);
+                Track track = new Track();
                 List<Turn> turns = new ArrayList<>();
                 BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                 String line;
+                track.setTrackName(reader.readLine());
 
                 while ((line = reader.readLine()) != null) {
                     Turn turnTemp = new Turn();
@@ -44,9 +45,8 @@ public class FileUtils {
                     turnTemp.setMessage(values[2]);
                     turns.add(turnTemp);
                 }
-                list.add(turns);
-                am.close();
-                is.close();
+                track.setTurnList(turns);
+                list.add(track);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -55,18 +55,19 @@ public class FileUtils {
         return list;
     }
 
-    public List<RankPosition> readRanking() {
-        List<RankPosition> rankingList = new ArrayList<>();
-
-        AssetManager am = mContext.getAssets();
+    public List<RankingList> readRanking() {
+        List<RankingList> rankingList = new ArrayList<>();
 
         try {
             String rankDir = "ranks";
-            String[] locales = am.list(rankDir);
+            String[] locales = mContext.getAssets().list(rankDir);
             for (String locale : locales) {
-                is = am.open(rankDir + "/" + locale);
+                InputStream is = mContext.getAssets().open(rankDir + "/" + locale);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                RankingList ranking = new RankingList();
+                List<RankPosition> tempList = new ArrayList<>();
                 String line;
+                ranking.setTrackName(reader.readLine());
 
                 int i = 1;
                 while ((line = reader.readLine()) != null) {
@@ -74,11 +75,12 @@ public class FileUtils {
                     String[] values = line.split(",");
                     rankTemp.setName(values[0]);
                     rankTemp.setTime(values[1]);
-                    rankTemp.setPosition(i);
-                    rankingList.add(rankTemp);
+                    rankTemp.setPosition(String.valueOf(i) + ".");
+                    tempList.add(rankTemp);
                     i++;
                 }
-                am.close();
+                ranking.setRanks(tempList);
+                rankingList.add(ranking);
             }
         } catch (IOException e) {
             e.printStackTrace();

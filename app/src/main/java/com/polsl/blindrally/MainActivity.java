@@ -17,10 +17,13 @@ import android.widget.Button;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.polsl.blindrally.models.RankPosition;
+import com.polsl.blindrally.models.RankingList;
+import com.polsl.blindrally.models.Track;
 import com.polsl.blindrally.models.Turn;
 import com.polsl.blindrally.utils.TrackBank;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,17 +35,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private boolean eventFlag = true;
     float x1;
     float y1;
+    int trackNo = 0;
+    String trackName = "";
+    private List<Track> tracks = new ArrayList<>();
 
     private TextToSpeech mTTS;
     private Button mButtonSpeak;
+    private final TrackBank trackBank = new TrackBank();
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-//        TrackBank trackBank = new TrackBank();
-//        List<List<Turn>> tracks = trackBank.getTracks(MainActivity.this);
+
+        tracks = trackBank.getTracks(MainActivity.this);
 
         Log.d(TAG, "onCreate: Initializing Sensor Services");
 
@@ -50,7 +57,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         sensorManager.registerListener(MainActivity.this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        Log.d(TAG, "onCreate: Registered accelerometer listener");
 
         mButtonSpeak = findViewById(R.id.button_speak);
         mTTS = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
@@ -64,7 +70,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     } else {
                         mButtonSpeak.setEnabled(true);
                     }
-                    speak("Welcome to Blind Rally. Swipe right to choose tracks. Swipe up to read ranking for chosen track. Double tap to start game");
+                    speak("Welcome to Blind Rally. Swipe left to choose tracks. Swipe up to read ranking for chosen track. Double tap to start game after choosing track.");
                 }
             }
         });
@@ -116,13 +122,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     float deltaX = x2 - x1;
                     float deltaY = y2 - y1;
 
-                    if (!(deltaX > MIN_DISTANCE && -deltaY > MIN_DISTANCE)) {
+                    if (Math.abs(deltaX) < MIN_DISTANCE && Math.abs(deltaY) > MIN_DISTANCE) {
                         speak("Players ranking");
-                        speakRanking(ranking.showRanking(MainActivity.this));
+                        RankingList rankingList = ranking.showRanking(MainActivity.this, trackName);
+                        speak(rankingList.getTrackName());
+                        speakRanking(rankingList);
                     }
 
-                    if (deltaX > MIN_DISTANCE && deltaY < MIN_DISTANCE) {
-                        speak("Track one");
+                    if (-deltaX > MIN_DISTANCE && Math.abs(deltaY) < MIN_DISTANCE) {
+                        trackName = tracks.get(trackNo).getTrackName();
+                        speak(trackName);
+
+                        trackNo++;
+                        if (trackNo > tracks.size() - 1) {
+                            trackNo = 0;
+                        } else if (trackNo < 0) {
+                            trackNo = tracks.size() - 1;
+                        }
                     }
                     break;
             }
@@ -130,12 +146,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private void speak(String text) {
-        mTTS.speak(text, TextToSpeech.QUEUE_FLUSH, null);
+        mTTS.speak(text, TextToSpeech.QUEUE_ADD, null);
     }
 
-    private void speakRanking(List<RankPosition> ranking) {
-        for (int i = 0; i < ranking.size(); i++) {
-            mTTS.speak(String.valueOf(ranking.get(i).getPosition()) + ranking.get(i).getName() + ranking.get(i).getTime(), TextToSpeech.QUEUE_ADD, null);
+    private void speakRanking(RankingList ranking) {
+        List<RankPosition> ranks = ranking.getRanks();
+        for (int i = 0; i < ranks.size(); i++) {
+            mTTS.speak(String.valueOf(ranks.get(i).getPosition()) + ranks.get(i).getName() + ranks.get(i).getTime(), TextToSpeech.QUEUE_ADD, null);
         }
     }
 
