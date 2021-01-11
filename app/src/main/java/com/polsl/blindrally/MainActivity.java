@@ -19,10 +19,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.polsl.blindrally.models.RankPosition;
 import com.polsl.blindrally.models.RankingList;
 import com.polsl.blindrally.models.Track;
-import com.polsl.blindrally.models.Turn;
 import com.polsl.blindrally.utils.TrackBank;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -33,14 +31,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private static final int MIN_DISTANCE = 300;
 
     private boolean eventFlag = true;
-    float x1;
-    float y1;
-    int trackNo = 0;
-    String trackName = "";
-    private List<Track> tracks = new ArrayList<>();
+    private boolean isInTurn = true;
+    private boolean isInGame = false;
 
+    private float x1, y1; // position variables
+    private float beforeTurnPos, afterTurnPos;
+
+    int trackNo = 0, exTime, clickedTime;
+    String trackName = "";
+
+    private List<Track> tracks = new ArrayList<>();
     private TextToSpeech mTTS;
+    private SensorEvent sensorEvent;
     private Button mButtonSpeak;
+    private RankingList rankingList;
     private final TrackBank trackBank = new TrackBank();
 
     @SuppressLint("ClickableViewAccessibility")
@@ -78,9 +82,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                eventFlag = true;
-                gestureDetector.onTouchEvent(event);
-                onTouchResponse(event);
+                isInTurn = !isInTurn;
+                if (!isInGame) {
+                    eventFlag = true;
+                    gestureDetector.onTouchEvent(event);
+                    onTouchResponse(event);
+                }
+
                 return true;
             }
 
@@ -88,9 +96,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                 @Override
                 public boolean onDoubleTap(MotionEvent e) {
+                    isInGame = true;
                     speak("The game will start in 3... 2... 1...");
                     eventFlag = false;
-                    return super.onDoubleTap(e);
+                    gameAlgorithm();
+
+                    return false;
                 }
             });
         });
@@ -99,11 +110,38 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onSensorChanged(SensorEvent event) {
         Log.d(TAG, " X: " + event.values[0] + " Y: " + event.values[1] + " Z: " + event.values[2]);
+        sensorEvent = event;
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
+    }
+
+    void gameAlgorithm() {
+        Object lock = new Object();
+        synchronized (lock) {
+            Track inGameTrack = tracks.get(trackNo);
+            int speed = 50;
+            int i = 0;
+            while (i < inGameTrack.getTurnList().size()) {
+                float time = inGameTrack.getTurnList().get(i).getDistance() / speed * 500;
+                if (inGameTrack.getTurnList().get(i).getAngle() > 0)
+                    speak(Float.toString(time) + "." + Math.abs(inGameTrack.getTurnList().get(i).getAngle()) + "  degrees left.");
+                else
+                    speak(Float.toString(time) + "." + Math.abs(inGameTrack.getTurnList().get(i).getAngle()) + "  degrees right.");
+
+                try {
+                    lock.wait((long) time);
+                    speak("... now");
+                } catch (InterruptedException interruptedException) {
+                    interruptedException.printStackTrace();
+                }
+                speak(Integer.toString(Math.round(sensorEvent.values[0] * 100)) + " degrees.");
+
+                i++;
+            }
+        }
     }
 
     private void onTouchResponse(MotionEvent event) {
@@ -124,7 +162,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     if (Math.abs(deltaX) < MIN_DISTANCE && Math.abs(deltaY) > MIN_DISTANCE) {
                         speak("Players ranking");
-                        RankingList rankingList = ranking.showRanking(MainActivity.this, trackName);
+                        rankingList = ranking.showRanking(MainActivity.this, trackName);
                         speak(rankingList.getTrackName());
                         speakRanking(rankingList);
                     }
