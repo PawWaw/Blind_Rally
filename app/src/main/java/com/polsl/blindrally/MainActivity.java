@@ -2,6 +2,7 @@ package com.polsl.blindrally;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -12,15 +13,20 @@ import android.util.Log;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
+import android.widget.ImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.polsl.blindrally.models.RankPosition;
 import com.polsl.blindrally.models.RankingList;
 import com.polsl.blindrally.models.Track;
+import com.polsl.blindrally.models.Turn;
 import com.polsl.blindrally.utils.TrackBank;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -31,27 +37,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private static final int MIN_DISTANCE = 300;
 
     private boolean eventFlag = true;
+    private boolean firstTurnFlag = true;
     private boolean isInTurn = true;
     private boolean isInGame = false;
 
-    private float x1, y1; // position variables
-    private float beforeTurnPos, afterTurnPos;
+    private float x1, y1, diff = 0; // position variables
 
-    int trackNo = 0, exTime, clickedTime;
+    private int turnCount = 0;
+    private int trackNo = 0;
+    private int inGamePoints = 0;
+
+    private Instant startTurn;
+
     String trackName = "";
 
     private List<Track> tracks = new ArrayList<>();
     private TextToSpeech mTTS;
-    private SensorEvent sensorEvent;
-    private Button mButtonSpeak;
+    private ImageView imageView;
     private RankingList rankingList;
     private final TrackBank trackBank = new TrackBank();
+
+    private SensorManager sensorManager;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
         tracks = trackBank.getTracks(MainActivity.this);
 
@@ -62,7 +75,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         sensorManager.registerListener(MainActivity.this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
 
-        mButtonSpeak = findViewById(R.id.button_speak);
+        imageView = findViewById(R.id.imageView);
         mTTS = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
             @Override
             public void onInit(int status) {
@@ -70,15 +83,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     int result = mTTS.setLanguage(Locale.ENGLISH);
                     mTTS.setSpeechRate((float) 0.8);
 
-                    if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    } else {
-                        mButtonSpeak.setEnabled(true);
+                    if (result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
+                        imageView.setEnabled(true);
                     }
                     speak("Welcome to Blind Rally. Swipe left to choose tracks. Swipe up to read ranking for chosen track. Double tap to start game after choosing track.");
                 }
             }
         });
-        mButtonSpeak.setOnTouchListener(new View.OnTouchListener() {
+        imageView.setOnTouchListener(new View.OnTouchListener() {
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -97,9 +109,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 @Override
                 public boolean onDoubleTap(MotionEvent e) {
                     isInGame = true;
-                    speak("The game will start in 3... 2... 1...");
+                    speak("The game will start in 3... 2... 1... ");
                     eventFlag = false;
-                    gameAlgorithm();
 
                     return false;
                 }
@@ -107,10 +118,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
     }
 
+    private void gameSummary(int points) {
+        speak("Points collected: " + points);
+//        speak("Perfect turns: ");
+//        speak("Good turns ");
+//        speak("Bad turns: ");
+        isInGame = false;
+
+        ImageView iw = findViewById(R.id.imageView);
+        iw.setImageDrawable(null);
+    }
+
     @Override
     public void onSensorChanged(SensorEvent event) {
         Log.d(TAG, " X: " + event.values[0] + " Y: " + event.values[1] + " Z: " + event.values[2]);
-        sensorEvent = event;
+
+        if (isInGame) {
+            if (firstTurnFlag) {
+                diff = timeToNextTurn();
+                firstTurnFlag = !firstTurnFlag;
+                startTurn = Instant.now();
+            }
+            if ((Duration.between(startTurn, Instant.now()).toMillis() / 1000) > diff) {
+                gameAlgorithm(event);
+                if (isInGame)
+                    diff = timeToNextTurn();
+                startTurn = Instant.now();
+            }
+        }
     }
 
     @Override
@@ -118,29 +153,65 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-    void gameAlgorithm() {
-        Object lock = new Object();
-        synchronized (lock) {
-            Track inGameTrack = tracks.get(trackNo);
-            int speed = 50;
-            int i = 0;
-            while (i < inGameTrack.getTurnList().size()) {
-                float time = inGameTrack.getTurnList().get(i).getDistance() / speed * 500;
-                if (inGameTrack.getTurnList().get(i).getAngle() > 0)
-                    speak(Float.toString(time) + "." + Math.abs(inGameTrack.getTurnList().get(i).getAngle()) + "  degrees left.");
-                else
-                    speak(Float.toString(time) + "." + Math.abs(inGameTrack.getTurnList().get(i).getAngle()) + "  degrees right.");
+    private void gameAlgorithm(SensorEvent event) {
+        Track inGameTrack = tracks.get(trackNo);
+        speak(" now! ");
+        inGamePoints += setPoints(event, inGameTrack.getTurnList().get(turnCount).getAngle());
 
-                try {
-                    lock.wait((long) time);
-                    speak("... now");
-                } catch (InterruptedException interruptedException) {
-                    interruptedException.printStackTrace();
-                }
-                speak(Integer.toString(Math.round(sensorEvent.values[0] * 100)) + " degrees.");
+        if (turnCount == inGameTrack.getTurnList().size() - 1)
+            gameSummary(inGamePoints);
+        else
+            turnCount++;
+    }
 
-                i++;
+    private float timeToNextTurn() {
+        int speed = 50;
+        Track inGameTrack = tracks.get(trackNo);
+        ImageView iw = findViewById(R.id.imageView);
+        InputStream ims;
+        Drawable drawable;
+        Turn nextTurn = inGameTrack.getTurnList().get(turnCount);
+
+        float diff = nextTurn.getDistance() / speed / 2;
+
+        try {
+            if (nextTurn.getAngle() > 45) {
+                ims = getAssets().open("sharpLeft.png");
+                drawable = Drawable.createFromStream(ims, null);
+                iw.setImageDrawable(drawable);
+            } else if (nextTurn.getAngle() > 0 && nextTurn.getAngle() <= 45) {
+                ims = getAssets().open("slightLeft.png");
+                drawable = Drawable.createFromStream(ims, null);
+                iw.setImageDrawable(drawable);
+            } else if (nextTurn.getAngle() < -45) {
+                ims = getAssets().open("sharpRight.png");
+                drawable = Drawable.createFromStream(ims, null);
+                iw.setImageDrawable(drawable);
+            } else if (nextTurn.getAngle() < 0 && nextTurn.getAngle() >= -45) {
+                ims = getAssets().open("slightRight.png");
+                drawable = Drawable.createFromStream(ims, null);
+                iw.setImageDrawable(drawable);
+            } else {
+                ims = getAssets().open("straight.png");
+                drawable = Drawable.createFromStream(ims, null);
+                iw.setImageDrawable(drawable);
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        speak(inGameTrack.getTurnList().get(turnCount).getMessage() + ". " + diff + " seconds. ");
+
+        return diff;
+    }
+
+    private int setPoints(SensorEvent sensorEvent, int angle) {
+        if (Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) < 10) {
+            return 10;
+        } else if (Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) < 20 && Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) >= 10) {
+            return 5;
+        } else {
+            return 0;
         }
     }
 
