@@ -120,9 +120,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private void gameSummary(int points) {
         speak("Points collected: " + points);
-//        speak("Perfect turns: ");
-//        speak("Good turns ");
-//        speak("Bad turns: ");
         isInGame = false;
 
         ImageView iw = findViewById(R.id.imageView);
@@ -206,10 +203,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private int setPoints(SensorEvent sensorEvent, int angle) {
-        if (Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) < 10) {
+        if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 10) {
             return 10;
-        } else if (Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) < 20 && Math.abs(Math.abs(sensorEvent.values[0]) * 10 - Math.abs(angle)) >= 10) {
-            return 5;
+        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 15 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 10) {
+            return 8;
+        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 20 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 15) {
+            return 6;
+        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 25 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 20) {
+            return 4;
+        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 30 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 25) {
+            return 8;
         } else {
             return 0;
         }
@@ -231,14 +234,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     float deltaX = x2 - x1;
                     float deltaY = y2 - y1;
 
-                    if (Math.abs(deltaX) < MIN_DISTANCE && Math.abs(deltaY) > MIN_DISTANCE) {
+                    if (Math.abs(deltaX) > MIN_DISTANCE && Math.abs(deltaY) < MIN_DISTANCE && !trackName.equals("")) {
                         speak("Players ranking");
                         rankingList = ranking.showRanking(MainActivity.this, trackName);
                         speak(rankingList.getTrackName());
                         speakRanking(rankingList);
                     }
 
-                    if (-deltaX > MIN_DISTANCE && Math.abs(deltaY) < MIN_DISTANCE) {
+                    if (-deltaX < MIN_DISTANCE && Math.abs(deltaY) > MIN_DISTANCE) {
                         trackName = tracks.get(trackNo).getTrackName();
                         speak(trackName);
 
