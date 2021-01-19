@@ -1,10 +1,10 @@
 package com.polsl.blindrally.models;
 
-public class RankPosition {
+public class RankPosition implements Comparable<RankPosition>{
 
     private String position;
     private String name;
-    private String time;
+    private Integer score;
 
     public String getPosition() {
         return position;
@@ -22,11 +22,17 @@ public class RankPosition {
         this.name = name;
     }
 
-    public String getTime() {
-        return time;
+    public Integer getScore() {
+        return score;
     }
 
-    public void setTime(String time) {
-        this.time = time;
+    public void setScore(Integer score) {
+        this.score = score;
+    }
+
+
+    @Override
+    public int compareTo(RankPosition o) {
+        return this.getScore().compareTo(o.getScore());
     }
 }

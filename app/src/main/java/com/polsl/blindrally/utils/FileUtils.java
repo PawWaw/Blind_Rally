@@ -1,7 +1,7 @@
 package com.polsl.blindrally.utils;
 
 import android.content.Context;
-import android.content.res.AssetManager;
+import android.util.Log;
 
 import com.polsl.blindrally.models.RankPosition;
 import com.polsl.blindrally.models.RankingList;
@@ -12,6 +12,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -74,8 +75,8 @@ public class FileUtils {
                     RankPosition rankTemp = new RankPosition();
                     String[] values = line.split(",");
                     rankTemp.setName(values[0]);
-                    rankTemp.setTime(values[1]);
-                    rankTemp.setPosition(String.valueOf(i) + ".");
+                    String temp = values[1];
+                    rankTemp.setScore(Integer.parseInt(temp.trim()));
                     tempList.add(rankTemp);
                     i++;
                 }

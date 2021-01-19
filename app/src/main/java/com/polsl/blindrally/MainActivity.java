@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int turnCount = 0;
     private int trackNo = 0;
     private int inGamePoints = 0;
+    private int perfect = 0, vgood = 0, good = 0, bad = 0, vbad = 0;
 
     private Instant startTurn;
 
@@ -56,15 +57,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private ImageView imageView;
     private RankingList rankingList;
     private final TrackBank trackBank = new TrackBank();
-
-    private SensorManager sensorManager;
+    private Ranking ranking = new Ranking();
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
         tracks = trackBank.getTracks(MainActivity.this);
 
@@ -104,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 return true;
             }
 
-            private GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
+            private final GestureDetector gestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
 
                 @Override
                 public boolean onDoubleTap(MotionEvent e) {
@@ -118,9 +117,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
     }
 
-    private void gameSummary(int points) {
+    private void gameSummary(int points, int size) {
+        speak("Possible points: " + size * 10);
         speak("Points collected: " + points);
+        speak("Perfect turns: " + String.valueOf(perfect));
+        speak("Very good turns: " + String.valueOf(vgood));
+        speak("Good turns: " + String.valueOf(good));
+        speak("Bad turns: " + String.valueOf(bad));
+        speak("Very bad turns: " + String.valueOf(vbad));
+        perfect = 0;
+        good = 0;
+        bad = 0;
+        vbad = 0;
         isInGame = false;
+        inGamePoints = 0;
+        turnCount = 0;
 
         ImageView iw = findViewById(R.id.imageView);
         iw.setImageDrawable(null);
@@ -153,10 +164,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void gameAlgorithm(SensorEvent event) {
         Track inGameTrack = tracks.get(trackNo);
         speak(" now! ");
-        inGamePoints += setPoints(event, inGameTrack.getTurnList().get(turnCount).getAngle());
+        inGamePoints += setPoints(event, inGameTrack.getTurnList().get(turnCount).getAngle() * (-1));
 
         if (turnCount == inGameTrack.getTurnList().size() - 1)
-            gameSummary(inGamePoints);
+            gameSummary(inGamePoints, inGameTrack.getTurnList().size());
         else
             turnCount++;
     }
@@ -203,23 +214,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private int setPoints(SensorEvent sensorEvent, int angle) {
-        if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 10) {
+        float turnDiff = Math.abs(sensorEvent.values[1] * 9 - angle);
+        if (turnDiff < 10) {
+            perfect++;
             return 10;
-        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 15 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 10) {
+        } else if (turnDiff < 15 && turnDiff >= 10) {
+            vgood++;
             return 8;
-        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 20 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 15) {
+        } else if (turnDiff < 20 && turnDiff >= 15) {
+            good++;
             return 6;
-        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 25 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 20) {
+        } else if (turnDiff < 25 && turnDiff >= 20) {
+            bad++;
             return 4;
-        } else if (Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) < 30 && Math.abs(Math.abs(sensorEvent.values[1]) * 10 - Math.abs(angle)) >= 25) {
-            return 8;
+        } else if (turnDiff < 30 && turnDiff >= 25) {
+            vbad++;
+            return 2;
         } else {
             return 0;
         }
     }
 
     private void onTouchResponse(MotionEvent event) {
-        Ranking ranking = new Ranking();
 
         if (eventFlag) {
             switch (event.getAction()) {
@@ -242,15 +258,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
 
                     if (-deltaX < MIN_DISTANCE && Math.abs(deltaY) > MIN_DISTANCE) {
-                        trackName = tracks.get(trackNo).getTrackName();
-                        speak(trackName);
-
                         trackNo++;
                         if (trackNo > tracks.size() - 1) {
                             trackNo = 0;
                         } else if (trackNo < 0) {
                             trackNo = tracks.size() - 1;
                         }
+                        trackName = tracks.get(trackNo).getTrackName();
+                        speak(trackName);
                     }
                     break;
             }
@@ -264,7 +279,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void speakRanking(RankingList ranking) {
         List<RankPosition> ranks = ranking.getRanks();
         for (int i = 0; i < ranks.size(); i++) {
-            mTTS.speak(String.valueOf(ranks.get(i).getPosition()) + ranks.get(i).getName() + ranks.get(i).getTime(), TextToSpeech.QUEUE_ADD, null);
+            mTTS.speak(String.valueOf(i + 1) + "." + ranks.get(i).getName() + ranks.get(i).getScore() + " points.", TextToSpeech.QUEUE_ADD, null);
         }
     }
 
